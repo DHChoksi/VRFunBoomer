@@ -11,6 +11,9 @@ public class Bomb : MonoBehaviour
     [SerializeField] private Transform visual;
     [SerializeField] private Animator animator;
 
+    [Header("Spark Effect")]
+    [SerializeField] private GameObject sparkEffect; // <-- ADDED
+
     [Header("Stick Settings")]
     [SerializeField] private LayerMask stickMask = ~0;
     [SerializeField] private float surfaceOffset = 0.02f;
@@ -66,6 +69,9 @@ public class Bomb : MonoBehaviour
 
         visual.localScale = visualOriginalScale;
 
+        if (sparkEffect != null)
+            sparkEffect.SetActive(false); // <-- ADDED
+
         if (poolParent != null)
             transform.SetParent(poolParent, true);
     }
@@ -79,6 +85,9 @@ public class Bomb : MonoBehaviour
             StopCoroutine(pulseRoutine);
 
         visual.localScale = visualOriginalScale;
+
+        if (sparkEffect != null)
+            sparkEffect.SetActive(false); // <-- ADDED
     }
 
     private void OnReleased()
@@ -112,13 +121,16 @@ public class Bomb : MonoBehaviour
 
         if (grab) grab.enabled = false;
 
+        if (sparkEffect != null)
+            sparkEffect.SetActive(true); // <-- ADDED (ONLY ENABLE HERE)
+
         pulseRoutine = StartCoroutine(PulseThenExplode());
     }
 
     private IEnumerator PulseThenExplode()
     {
         animator.Play("BombTick", 0, 0f);
-        yield return null; // wait one frame so state updates
+        yield return null;
 
         float animationTime = animator.GetCurrentAnimatorStateInfo(0).length;
         yield return new WaitForSeconds(animationTime);
@@ -128,11 +140,9 @@ public class Bomb : MonoBehaviour
 
     private void Explode()
     {
-        // Explosion FX
         if (explosionPool != null)
             explosionPool.Spawn(transform.position, Quaternion.identity);
 
-        // Sphere range check
         Collider[] hits = Physics.OverlapSphere(transform.position, explosionRadius);
         foreach (var hit in hits)
         {
@@ -152,6 +162,9 @@ public class Bomb : MonoBehaviour
 
         if (visual != null)
             visual.localScale = visualOriginalScale;
+
+        if (sparkEffect != null)
+            sparkEffect.SetActive(false); // <-- ADDED
 
         if (poolParent != null)
             transform.SetParent(poolParent, true);

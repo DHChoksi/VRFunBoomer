@@ -2,6 +2,7 @@
 using UnityEngine.UI;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
+using UnityEngine.SceneManagement;
 using System.Collections;
 
 public class PlayerHealth : MonoBehaviour
@@ -31,6 +32,12 @@ public class PlayerHealth : MonoBehaviour
     [SerializeField] float vignetteFadeSpeed = 3f;
     [SerializeField] float hurtDuration = 1f;
 
+    [Header("Death Screen")]
+    [SerializeField] Canvas gameOverCanvas;
+    [SerializeField] float deathFadeSpeed = 0.75f;
+    [SerializeField] Color deathRed = new Color(0.4f, 0f, 0f, 1f);
+    [SerializeField] float reloadDelay = 2f;
+
     [Header("Movement")]
     [SerializeField] HeadBobMoveProvider movement;
 
@@ -50,11 +57,15 @@ public class PlayerHealth : MonoBehaviour
             postProcessVolume.profile.TryGet(out vignette))
         {
             vignette.intensity.Override(vignetteMin);
+            vignette.color.Override(Color.black);
         }
         else
         {
             Debug.LogError("Vignette not found in Volume!");
         }
+
+        if (gameOverCanvas)
+            gameOverCanvas.enabled = false;
     }
 
     // ------------------------------------------------
@@ -62,8 +73,6 @@ public class PlayerHealth : MonoBehaviour
     // ------------------------------------------------
     public void OnEnemyAttack()
     {
-        Debug.Log("PlayerHealth.OnEnemyAttack() called");
-
         if (currentState == PlayerState.Hurt || currentState == PlayerState.Dead)
             return;
 
@@ -80,8 +89,6 @@ public class PlayerHealth : MonoBehaviour
 
         if (healthSlider)
             healthSlider.value = currentHealth;
-
-        Debug.Log($"Player Health: {currentHealth}");
 
         if (currentHealth <= 0)
         {
@@ -102,12 +109,8 @@ public class PlayerHealth : MonoBehaviour
         if (movement)
             movement.enabled = false;
 
-        // Fade IN
         yield return StartCoroutine(FadeVignette(vignetteMax));
-
         yield return new WaitForSeconds(hurtDuration);
-
-        // Fade OUT
         yield return StartCoroutine(FadeVignette(vignetteMin));
 
         if (movement)
@@ -117,13 +120,10 @@ public class PlayerHealth : MonoBehaviour
     }
 
     // ------------------------------------------------
-    // VIGNETTE FADE
+    // VIGNETTE FADE (NORMAL TIME)
     // ------------------------------------------------
     IEnumerator FadeVignette(float target)
     {
-        if (vignette == null)
-            yield break;
-
         float start = vignette.intensity.value;
 
         while (!Mathf.Approximately(vignette.intensity.value, target))
@@ -144,14 +144,54 @@ public class PlayerHealth : MonoBehaviour
     // ------------------------------------------------
     void Die()
     {
-        Debug.Log("Player died");
+        if (currentState == PlayerState.Dead)
+            return;
 
         currentState = PlayerState.Dead;
 
         if (movement)
             movement.enabled = false;
 
-        if (vignette != null)
-            vignette.intensity.Override(vignetteMax);
+        StartCoroutine(DeathRoutine());
+    }
+
+    IEnumerator DeathRoutine()
+    {
+        // Dark red vignette
+        vignette.color.Override(deathRed);
+
+        // Fade to full black
+        yield return StartCoroutine(FadeVignetteUnscaled(1f));
+
+        if (gameOverCanvas)
+            gameOverCanvas.enabled = true;
+
+        // Freeze time
+        Time.timeScale = 0f;
+
+        // Wait while frozen
+        yield return new WaitForSecondsRealtime(reloadDelay);
+
+        // Reload
+        Time.timeScale = 1f;
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+    }
+
+    // ------------------------------------------------
+    // VIGNETTE FADE (UNSCALED TIME)
+    // ------------------------------------------------
+    IEnumerator FadeVignetteUnscaled(float target)
+    {
+        while (!Mathf.Approximately(vignette.intensity.value, target))
+        {
+            float value = Mathf.MoveTowards(
+                vignette.intensity.value,
+                target,
+                Time.unscaledDeltaTime * deathFadeSpeed
+            );
+
+            vignette.intensity.Override(value);
+            yield return null;
+        }
     }
 }
