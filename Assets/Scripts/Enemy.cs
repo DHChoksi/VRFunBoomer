@@ -1,53 +1,192 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.AI;
 
 public class Enemy : MonoBehaviour
 {
-    [SerializeField]
-    private NavMeshAgent m_NavMeshAgent = null;    
-
-    [SerializeField]
-    private Transform m_Point1, m_Point2 = null;
-
-    private enum destinationState
+    public enum EnemyState
     {
-        Point1,
-        Point2
+        Patrol,
+        Follow,
+        Attack,
+        Dead
     }
 
-    [SerializeField]
-    private destinationState m_CurrentDestination = destinationState.Point2;
+    [Header("State")]
+    public EnemyState currentState = EnemyState.Patrol;
+
+    [Header("References")]
+    [SerializeField] NavMeshAgent agent;
+    [SerializeField] Animator animator;
+
+    [Header("Patrol")]
+    [SerializeField] Transform pointA;
+    [SerializeField] Transform pointB;
+    Transform currentPatrolTarget;
+
+    [Header("Detection")]
+    [SerializeField] float detectionRange = 10f;
+    [SerializeField] float attackRange = 2f;
+    [SerializeField] LayerMask playerLayer;
+
+    [Header("Attack")]
+    [SerializeField] float attackCooldown = 1.5f;
+    bool canAttack = true;
+
+    [Header("Death")]
+    [SerializeField] GameObject enemyRoot;
+
+    Transform player;
 
     void Start()
-    {   
-        if (m_NavMeshAgent == null)
-            m_NavMeshAgent = GetComponent<NavMeshAgent>();
-
-       MoveToDestination(m_Point2.position, destinationState.Point2); 
+    {
+        if (!agent) agent = GetComponent<NavMeshAgent>();
+        currentPatrolTarget = pointA;
     }
 
     void Update()
     {
-        if (!ReachedDestination()) return;
+        if (currentState == EnemyState.Dead)
+            return;
 
-        if (m_CurrentDestination == destinationState.Point2)
-            MoveToDestination(m_Point1.position, destinationState.Point1);
+        DetectPlayer();
+
+        switch (currentState)
+        {
+            case EnemyState.Patrol:
+                Patrol();
+                break;
+
+            case EnemyState.Follow:
+                Follow();
+                break;
+
+            case EnemyState.Attack:
+                TryAttack();
+                break;
+        }
+    }
+
+    // ------------------------------------------------
+    // PLAYER DETECTION (OverlapSphere from enemy)
+    // ------------------------------------------------
+    void DetectPlayer()
+    {
+        Collider[] hits = Physics.OverlapSphere(
+            transform.position,
+            detectionRange,
+            playerLayer
+        );
+
+        if (hits.Length == 0)
+        {
+            player = null;
+            currentState = EnemyState.Patrol;
+            return;
+        }
+
+        player = hits[0].transform;
+
+        float distance = Vector3.Distance(transform.position, player.position);
+
+        if (distance <= attackRange)
+            currentState = EnemyState.Attack;
         else
-            MoveToDestination(m_Point2.position, destinationState.Point2);
+            currentState = EnemyState.Follow;
     }
 
-    private bool ReachedDestination()
+    // ------------------------------------------------
+    // PATROL
+    // ------------------------------------------------
+    void Patrol()
     {
-        if (m_NavMeshAgent.pathPending) 
-                return false;
-        return m_NavMeshAgent.remainingDistance <= m_NavMeshAgent.stoppingDistance + 0.05f;
+        agent.isStopped = false;
+        agent.SetDestination(currentPatrolTarget.position);
+
+        if (Vector3.Distance(transform.position, currentPatrolTarget.position) < 0.5f)
+        {
+            currentPatrolTarget =
+                currentPatrolTarget == pointA ? pointB : pointA;
+        }
     }
 
-    private void MoveToDestination(Vector3 destination, destinationState destinationState)
+    // ------------------------------------------------
+    // FOLLOW
+    // ------------------------------------------------
+    void Follow()
     {
-        m_CurrentDestination = destinationState;
-        m_NavMeshAgent.SetDestination(destination);
+        if (!player) return;
+
+        agent.isStopped = false;
+        agent.SetDestination(player.position);
+    }
+
+    // ------------------------------------------------
+    // ATTACK (ANIMATION-DRIVEN)
+    // ------------------------------------------------
+    void TryAttack()
+    {
+        if (!canAttack || player == null)
+            return;
+
+        Debug.Log("Enemy ATTACK triggered");
+
+        Transform playerRoot = player.root;
+
+        var health = playerRoot.GetComponentInChildren<PlayerHealth>();
+        if (health == null)
+        {
+            Debug.LogError("❌ PlayerHealth NOT FOUND on XR player!");
+            return;
+        }
+
+        Debug.Log("✅ PlayerHealth FOUND");
+        health.OnEnemyAttack();
+
+        animator.SetTrigger("Attack");
+        StartCoroutine(AttackCooldown());
+    }
+
+
+    System.Collections.IEnumerator AttackCooldown()
+    {
+        canAttack = false;
+        yield return new WaitForSeconds(attackCooldown);
+        canAttack = true;
+    }
+
+    // ------------------------------------------------
+    // DEATH (Any State → Die)
+    // ------------------------------------------------
+    public void OnBombHit()
+    {
+        if (currentState == EnemyState.Dead)
+            return;
+
+        currentState = EnemyState.Dead;
+
+        agent.isStopped = true;
+        agent.enabled = false;
+
+        animator.SetTrigger("Die");
+
+        Invoke(nameof(DisableEnemy), 2f);
+    }
+
+    void DisableEnemy()
+    {
+        if (enemyRoot)
+            enemyRoot.SetActive(false);
+    }
+
+    // ------------------------------------------------
+    // DEBUG
+    // ------------------------------------------------
+    void OnDrawGizmosSelected()
+    {
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireSphere(transform.position, detectionRange);
+
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireSphere(transform.position, attackRange);
     }
 }

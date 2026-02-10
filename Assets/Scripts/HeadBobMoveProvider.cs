@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.XR.Interaction.Toolkit;
 using Unity.XR.CoreUtils;
@@ -8,9 +8,9 @@ using UnityEngine.XR.Interaction.Toolkit.Inputs;
 public class HeadBobMoveProvider : LocomotionProvider
 {
     [Header("References")]
-    [SerializeField] XROrigin xrOrigin;                 // If null, will auto-find
-    [SerializeField] Camera playerCamera;               // Only used for forward direction
-    [SerializeField] CharacterController controller;    // Required (auto-fills)
+    [SerializeField] XROrigin xrOrigin;              // If null, will auto-find
+    [SerializeField] Camera playerCamera;            // Only used for forward direction
+    [SerializeField] CharacterController controller; // Required (auto-fills)
 
     [Header("Input")]
     [Tooltip("Vector2 move input (e.g., left joystick).")]
@@ -43,21 +43,23 @@ public class HeadBobMoveProvider : LocomotionProvider
     [Tooltip("How quickly the bob returns to neutral when stopping.")]
     [SerializeField, Range(1f, 20f)] float bobDamp = 8f;
 
-    [Tooltip("Phase shift (0..1) so step hits align with bob trough/peak. -0.25 puts a trough at each step.")]
+    [Tooltip("Phase shift (0..1) so step hits align with bob trough/peak.")]
     [SerializeField, Range(-1f, 1f)] float bobPhaseOffset = -0.25f;
 
     [Header("Footsteps")]
-    [SerializeField] AudioSource footstepSource;        // One-shot AudioSource (no loop)
+    [SerializeField] AudioSource footstepSource; // One-shot AudioSource
     [SerializeField] AudioClip[] footstepClips;
-    [Tooltip("Footstep cadence at full speed (steps/sec, each foot). Also drives bobbing phase.")]
+
+    [Tooltip("Footstep cadence at full speed (steps/sec, each foot).")]
     [SerializeField, Min(0.1f)] float stepFrequency = 1.8f;
 
     // Internal
     float verticalVelocity;
-    float stepPhase;               // 0..1 cycling phase (2 steps per cycle at 0.0 and 0.5)
+    float stepPhase;
     float lastStepPhase;
-    Transform floorOffset;         // xrOrigin.CameraFloorOffsetObject.transform
-    float offsetLocalStartY;       // baseline Y of origin's floor offset
+
+    Transform floorOffset;
+    float offsetLocalStartY;
     bool haveFloorOffset;
 
     protected void Reset()
@@ -68,15 +70,18 @@ public class HeadBobMoveProvider : LocomotionProvider
 
     protected void Awake()
     {
-        if (controller == null) controller = GetComponent<CharacterController>();
-        if (xrOrigin == null) xrOrigin = GetComponentInParent<XROrigin>();
+        if (controller == null)
+            controller = GetComponent<CharacterController>();
+
+        if (xrOrigin == null)
+            xrOrigin = GetComponentInParent<XROrigin>();
 
         if (xrOrigin != null && xrOrigin.Camera != null)
             playerCamera = xrOrigin.Camera;
 
-        // Use XR Origin's floor offset transform for bobbing
         var floorObj = xrOrigin != null ? xrOrigin.CameraFloorOffsetObject : null;
         floorOffset = floorObj ? floorObj.transform : null;
+
         if (floorOffset != null)
         {
             offsetLocalStartY = floorOffset.localPosition.y;
@@ -88,21 +93,26 @@ public class HeadBobMoveProvider : LocomotionProvider
 
     protected void OnEnable()
     {
-        if (UsingRuntimeAction) runtimeMoveAction.Enable();
-        else moveAction.action?.Enable();
+        if (UsingRuntimeAction)
+            runtimeMoveAction.Enable();
+        else
+            moveAction.action?.Enable();
     }
 
     protected void OnDisable()
     {
-        if (UsingRuntimeAction) runtimeMoveAction.Disable();
-        else moveAction.action?.Disable();
+        if (UsingRuntimeAction)
+            runtimeMoveAction.Disable();
+        else
+            moveAction.action?.Disable();
 
         RestoreYOffsetImmediate();
     }
 
     void OnDestroy()
     {
-        if (UsingRuntimeAction) runtimeMoveAction.Dispose();
+        if (UsingRuntimeAction)
+            runtimeMoveAction.Dispose();
     }
 
     void Update()
@@ -113,19 +123,16 @@ public class HeadBobMoveProvider : LocomotionProvider
         if (playerCamera == null && xrOrigin != null)
             playerCamera = xrOrigin.Camera;
 
-        // If floorOffset becomes available late (scene order), cache baseline
-        if (!haveFloorOffset && xrOrigin != null && xrOrigin.CameraFloorOffsetObject != null)
+        if (!haveFloorOffset && xrOrigin?.CameraFloorOffsetObject != null)
         {
             floorOffset = xrOrigin.CameraFloorOffsetObject.transform;
             offsetLocalStartY = floorOffset.localPosition.y;
             haveFloorOffset = true;
         }
 
-        // Read input (Vector2)
         Vector2 input = moveAction.action?.ReadValue<Vector2>() ?? Vector2.zero;
 
-        // Compute planar look-based direction(s)
-        var forwardRef = playerCamera != null ? playerCamera.transform.forward : transform.forward;
+        Vector3 forwardRef = playerCamera ? playerCamera.transform.forward : transform.forward;
         Vector3 fwd = Vector3.ProjectOnPlane(forwardRef, Vector3.up).normalized;
         Vector3 right = Vector3.Cross(Vector3.up, fwd);
 
@@ -134,7 +141,7 @@ public class HeadBobMoveProvider : LocomotionProvider
 
         if (forwardOnly)
         {
-            inputMag = input.magnitude;             // any stick pressure -> forward
+            inputMag = input.magnitude;
             moveDir = fwd;
         }
         else
@@ -143,45 +150,52 @@ public class HeadBobMoveProvider : LocomotionProvider
             moveDir = (fwd * input.y + right * input.x).normalized;
         }
 
-        // Exclusive locomotion request only when moving
         bool wantsToMove = inputMag > 0.01f;
-        if (wantsToMove && system != null && system.RequestExclusiveOperation(this) == RequestResult.Success)
+
+        if (wantsToMove &&
+            system != null &&
+            system.RequestExclusiveOperation(this) == RequestResult.Success)
         {
             ApplyMovement(moveDir, inputMag);
             system.FinishExclusiveOperation(this);
         }
         else
         {
-            // Even if not moving, smoothly return to neutral height.
             DampenYOffsetToNeutral();
         }
     }
 
     void EnsureMoveActionBound()
     {
-        if (!autoBindLeftThumbstick) return;
-        var assigned = moveAction.action;
-        if (assigned != null && assigned.bindings.Count > 0) return;
+        if (!autoBindLeftThumbstick)
+            return;
 
-        runtimeMoveAction = new InputAction("Runtime Move", InputActionType.Value, "<XRController>{LeftHand}/primary2DAxis");
+        var assigned = moveAction.action;
+        if (assigned != null && assigned.bindings.Count > 0)
+            return;
+
+        runtimeMoveAction = new InputAction(
+            "Runtime Move",
+            InputActionType.Value,
+            "<XRController>{LeftHand}/primary2DAxis"
+        );
+
         runtimeMoveAction.AddBinding("<XRController>{LeftHand}/thumbstick");
         runtimeMoveAction.AddBinding("<OculusTouchController>{LeftHand}/thumbstick");
-        runtimeMoveAction.AddBinding("<Gamepad>/leftStick"); // fallback for testing
-        runtimeMoveAction.Enable();
+        runtimeMoveAction.AddBinding("<Gamepad>/leftStick");
 
+        runtimeMoveAction.Enable();
         moveAction = new InputActionProperty(runtimeMoveAction);
     }
 
     void ApplyMovement(Vector3 moveDir, float inputMag)
     {
-        // Horizontal velocity
         Vector3 horiz = moveDir * (moveSpeed * inputMag);
 
-        // Gravity
         if (useGravity)
         {
             if (controller.isGrounded && verticalVelocity < 0f)
-                verticalVelocity = -0.5f; // stick to ground
+                verticalVelocity = -0.5f;
             else
                 verticalVelocity += gravity * Time.deltaTime;
         }
@@ -190,52 +204,49 @@ public class HeadBobMoveProvider : LocomotionProvider
             verticalVelocity = 0f;
         }
 
-        Vector3 motion = horiz * Time.deltaTime + Vector3.up * verticalVelocity * Time.deltaTime;
+        Vector3 motion =
+            horiz * Time.deltaTime +
+            Vector3.up * verticalVelocity * Time.deltaTime;
+
         controller.Move(motion);
 
-        // Head bob & footsteps (based on horizontal speed)
-        float horizSpeed = horiz.magnitude; // m/s scaled by inputMag
-        UpdateHeadBobAndSteps(horizSpeed);
+        UpdateHeadBobAndSteps(horiz.magnitude);
     }
 
     void UpdateHeadBobAndSteps(float horizSpeed)
     {
-        // Advance a normalized stride phase with speed; 0..1 per full stride (2 steps at 0 & 0.5).
         float speed01 = Mathf.Clamp01(horizSpeed / Mathf.Max(0.01f, moveSpeed));
         float stepAdv = speed01 * stepFrequency * Time.deltaTime;
+
         float prev = stepPhase;
         stepPhase = (stepPhase + stepAdv) % 1f;
 
-        // Footsteps exactly at 0.0 and 0.5 crossings
         if (CrossedPhase(prev, stepPhase, 0.0f)) PlayFootstep();
         if (CrossedPhase(prev, stepPhase, 0.5f)) PlayFootstep();
+
         lastStepPhase = stepPhase;
 
-        // Bob the XR Origin offset (not the Camera)
-        if (haveFloorOffset)
-        {
-            if (horizSpeed > bobStartSpeed)
-            {
-                // Lock bobbing to step phase; shift so dips/peaks line up with foot hits.
-                float phase = Wrap01(stepPhase + bobPhaseOffset);
-                float bobOffset = Mathf.Sin(phase * Mathf.PI * 2f) * bobAmplitude;
+        if (!haveFloorOffset)
+            return;
 
-                // Smoothly approach target Y around the cached baseline
-                float targetY = offsetLocalStartY + bobOffset;
-                var local = floorOffset.localPosition;
-                local.y = Mathf.Lerp(local.y, targetY, 1f - Mathf.Exp(-bobDamp * Time.deltaTime));
-                floorOffset.localPosition = local;
-            }
-            else
-            {
-                DampenYOffsetToNeutral();
-            }
+        if (horizSpeed > bobStartSpeed)
+        {
+            float phase = Wrap01(stepPhase + bobPhaseOffset);
+            float bobOffset = Mathf.Sin(phase * Mathf.PI * 2f) * bobAmplitude;
+
+            float targetY = offsetLocalStartY + bobOffset;
+            var local = floorOffset.localPosition;
+            local.y = Mathf.Lerp(local.y, targetY, 1f - Mathf.Exp(-bobDamp * Time.deltaTime));
+            floorOffset.localPosition = local;
+        }
+        else
+        {
+            DampenYOffsetToNeutral();
         }
     }
 
     static bool CrossedPhase(float prev, float curr, float target)
     {
-        // Handle wrap-around: treat the current interval on an unwrapped axis.
         if (curr < prev) curr += 1f;
         if (target < prev) target += 1f;
         return prev < target && curr >= target;
@@ -243,7 +254,7 @@ public class HeadBobMoveProvider : LocomotionProvider
 
     static float Wrap01(float x)
     {
-        x = x % 1f;
+        x %= 1f;
         if (x < 0f) x += 1f;
         return x;
     }
@@ -262,7 +273,9 @@ public class HeadBobMoveProvider : LocomotionProvider
 
     void DampenYOffsetToNeutral()
     {
-        if (!haveFloorOffset) return;
+        if (!haveFloorOffset)
+            return;
+
         var local = floorOffset.localPosition;
         local.y = Mathf.Lerp(local.y, offsetLocalStartY, 1f - Mathf.Exp(-bobDamp * Time.deltaTime));
         floorOffset.localPosition = local;
@@ -270,7 +283,9 @@ public class HeadBobMoveProvider : LocomotionProvider
 
     void RestoreYOffsetImmediate()
     {
-        if (!haveFloorOffset) return;
+        if (!haveFloorOffset)
+            return;
+
         var local = floorOffset.localPosition;
         local.y = offsetLocalStartY;
         floorOffset.localPosition = local;

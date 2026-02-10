@@ -1,38 +1,51 @@
 ﻿using UnityEngine;
 using UnityEngine.XR.Interaction.Toolkit;
+using System.Collections;
 
 [RequireComponent(typeof(Rigidbody))]
 [RequireComponent(typeof(XRGrabInteractable))]
 public class Bomb : MonoBehaviour
 {
     [Header("References")]
-    [SerializeField] private Animator animator;
     [SerializeField] private ExplosionPool explosionPool;
-
-    [Header("Animation")]
-    [SerializeField] private string tickStateName = "BombTick"; // exact state name in Animator
+    [SerializeField] private Transform visual;
+    [SerializeField] private Animator animator;
 
     [Header("Stick Settings")]
-    [SerializeField] private LayerMask stickMask = ~0;          // floor + enemies layers
-    [SerializeField] private bool parentToHitObject = true;     // stick to moving enemy
-    [SerializeField] private bool alignToSurfaceNormal = false; // optional
-    [SerializeField] private float surfaceOffset = 0.02f;       // small offset so it doesn’t clip
+    [SerializeField] private LayerMask stickMask = ~0;
+    [SerializeField] private float surfaceOffset = 0.02f;
+
+    [Header("Explosion Range")]
+    [SerializeField] private float explosionRadius = 3f;
+    [SerializeField] private string enemyTag = "Enemy";
+
+    public System.Action<GameObject> OnEnemyHit;
 
     private XRGrabInteractable grab;
-    private Rigidbody rb;
+    [SerializeField] private Rigidbody rb;
     private Collider[] cols;
 
-    private bool armed;   // becomes true after release
-    private bool stuck;   // prevents multiple hits
+    private bool armed;
+    private bool stuck;
     private Transform poolParent;
+    private Vector3 visualOriginalScale;
+    private Coroutine pulseRoutine;
 
     void Awake()
     {
         grab = GetComponent<XRGrabInteractable>();
         rb = GetComponent<Rigidbody>();
         cols = GetComponentsInChildren<Collider>();
-
         poolParent = transform.parent;
+
+        if (visual == null)
+        {
+            Debug.LogError("Bomb: Visual reference NOT assigned.", this);
+            enabled = false;
+            return;
+        }
+
+        visualOriginalScale = visual.localScale;
 
         grab.selectEntered.AddListener(_ => OnGrabbed());
         grab.selectExited.AddListener(_ => OnReleased());
@@ -40,7 +53,6 @@ public class Bomb : MonoBehaviour
 
     void OnEnable()
     {
-        // reset for pooling
         armed = false;
         stuck = false;
 
@@ -48,19 +60,12 @@ public class Bomb : MonoBehaviour
 
         rb.isKinematic = false;
         rb.useGravity = true;
+        rb.constraints = RigidbodyConstraints.None;
         rb.velocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
 
-        foreach (var c in cols)
-            c.enabled = true;
+        visual.localScale = visualOriginalScale;
 
-        if (animator)
-        {
-            animator.Rebind();
-            animator.Update(0f);
-        }
-
-        // return to pool parent (in case it was parented to an enemy)
         if (poolParent != null)
             transform.SetParent(poolParent, true);
     }
@@ -69,19 +74,21 @@ public class Bomb : MonoBehaviour
     {
         armed = false;
         stuck = false;
+
+        if (pulseRoutine != null)
+            StopCoroutine(pulseRoutine);
+
+        visual.localScale = visualOriginalScale;
     }
 
     private void OnReleased()
     {
-        // bomb can only stick AFTER release
         armed = true;
     }
 
     private void OnCollisionEnter(Collision collision)
     {
         if (!armed || stuck) return;
-
-        // only stick to selected layers
         if (((1 << collision.gameObject.layer) & stickMask) == 0) return;
 
         Stick(collision);
@@ -92,46 +99,69 @@ public class Bomb : MonoBehaviour
         stuck = true;
         armed = false;
 
-        // freeze physics immediately
         rb.velocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
         rb.useGravity = false;
+
+        rb.constraints = RigidbodyConstraints.FreezeAll;
         rb.isKinematic = true;
 
-        // move bomb to the hit point
         var contact = collision.GetContact(0);
-        Vector3 pos = contact.point + contact.normal * surfaceOffset;
-        transform.position = pos;
+        transform.position = contact.point + contact.normal * surfaceOffset;
+        transform.rotation = Quaternion.identity;
 
-        if (alignToSurfaceNormal)
-            transform.rotation = Quaternion.LookRotation(-contact.normal);
-
-        // optionally stick to enemy transform so it moves with them
-        if (parentToHitObject)
-            transform.SetParent(collision.transform, true);
-
-        // prevent re-grab while ticking
         if (grab) grab.enabled = false;
 
-        // play ticking animation
-        if (animator)
-            animator.Play(tickStateName, 0, 0f);
+        pulseRoutine = StartCoroutine(PulseThenExplode());
     }
 
-    // ✅ CALL THIS FROM AN ANIMATION EVENT at the END of BombTick clip
-    public void AnimationEvent_Explode()
+    private IEnumerator PulseThenExplode()
     {
+        animator.Play("BombTick", 0, 0f);
+        yield return null; // wait one frame so state updates
+
+        float animationTime = animator.GetCurrentAnimatorStateInfo(0).length;
+        yield return new WaitForSeconds(animationTime);
+
+        Explode();
+    }
+
+    private void Explode()
+    {
+        // Explosion FX
         if (explosionPool != null)
             explosionPool.Spawn(transform.position, Quaternion.identity);
 
-        // return bomb to pool (disable)
+        // Sphere range check
+        Collider[] hits = Physics.OverlapSphere(transform.position, explosionRadius);
+        foreach (var hit in hits)
+        {
+            if (hit.CompareTag(enemyTag))
+            {
+                BombEvents.BombHitEnemy(hit.gameObject, transform.position);
+            }
+        }
+
         gameObject.SetActive(false);
     }
 
     void OnDisable()
     {
-        // detach from enemy when pooled
+        if (pulseRoutine != null)
+            StopCoroutine(pulseRoutine);
+
+        if (visual != null)
+            visual.localScale = visualOriginalScale;
+
         if (poolParent != null)
             transform.SetParent(poolParent, true);
     }
+
+#if UNITY_EDITOR
+    void OnDrawGizmosSelected()
+    {
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireSphere(transform.position, explosionRadius);
+    }
+#endif
 }
