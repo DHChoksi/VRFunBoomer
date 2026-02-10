@@ -946,7 +946,7 @@ MonoBehaviour:
   animator: {fileID: 93385873}
   pointA: {fileID: 1621017684}
   pointB: {fileID: 864622105}
-  detectionRange: 10
+  detectionRange: 4
   attackRange: 2
   playerLayer:
     serializedVersion: 2
@@ -2561,7 +2561,7 @@ MonoBehaviour:
   animator: {fileID: 420375234}
   pointA: {fileID: 1130164737}
   pointB: {fileID: 1106058234}
-  detectionRange: 10
+  detectionRange: 8
   attackRange: 2
   playerLayer:
     serializedVersion: 2
@@ -3029,7 +3029,7 @@ MonoBehaviour:
   animator: {fileID: 455251360}
   pointA: {fileID: 1375638859}
   pointB: {fileID: 1506743392}
-  detectionRange: 10
+  detectionRange: 3.16
   attackRange: 2
   playerLayer:
     serializedVersion: 2
@@ -6885,7 +6885,7 @@ MonoBehaviour:
   animator: {fileID: 1117388409}
   pointA: {fileID: 470996477}
   pointB: {fileID: 803327709}
-  detectionRange: 10
+  detectionRange: 7
   attackRange: 2
   playerLayer:
     serializedVersion: 2
@@ -8656,7 +8656,7 @@ MonoBehaviour:
   animator: {fileID: 1331292732}
   pointA: {fileID: 937199405}
   pointB: {fileID: 1198232301}
-  detectionRange: 10
+  detectionRange: 7
   attackRange: 2
   playerLayer:
     serializedVersion: 2
@@ -9138,7 +9138,7 @@ MonoBehaviour:
   animator: {fileID: 1382951819}
   pointA: {fileID: 205960700}
   pointB: {fileID: 624152449}
-  detectionRange: 10
+  detectionRange: 6
   attackRange: 2
   playerLayer:
     serializedVersion: 2
@@ -9618,7 +9618,7 @@ MonoBehaviour:
   animator: {fileID: 1548868043}
   pointA: {fileID: 185608192}
   pointB: {fileID: 1703371646}
-  detectionRange: 10
+  detectionRange: 4
   attackRange: 2
   playerLayer:
     serializedVersion: 2
@@ -11558,7 +11558,7 @@ MonoBehaviour:
   animator: {fileID: 1911639919}
   pointA: {fileID: 527436543}
   pointB: {fileID: 269577233}
-  detectionRange: 10
+  detectionRange: 3.14
   attackRange: 2
   playerLayer:
     serializedVersion: 2
