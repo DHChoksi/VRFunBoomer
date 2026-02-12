@@ -144,16 +144,31 @@ public class Bomb : MonoBehaviour
             explosionPool.Spawn(transform.position, Quaternion.identity);
 
         Collider[] hits = Physics.OverlapSphere(transform.position, explosionRadius);
+
         foreach (var hit in hits)
         {
+            // --------------------
+            // ENEMY DAMAGE
+            // --------------------
             if (hit.CompareTag(enemyTag))
             {
                 BombEvents.BombHitEnemy(hit.gameObject, transform.position);
+            }
+
+            // --------------------
+            // PLAYER DAMAGE (XR SAFE)
+            // --------------------
+            PlayerHealth playerHealth = hit.GetComponentInParent<PlayerHealth>();
+            if (playerHealth != null)
+            {
+                Debug.Log("💥 Player hit by explosion");
+                playerHealth.TakeExplosionDamage(50f);
             }
         }
 
         gameObject.SetActive(false);
     }
+
 
     void OnDisable()
     {

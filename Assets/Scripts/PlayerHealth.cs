@@ -65,7 +65,8 @@ public class PlayerHealth : MonoBehaviour
         }
 
         if (gameOverCanvas)
-            gameOverCanvas.enabled = false;
+            gameOverCanvas.gameObject.SetActive(false);
+
     }
 
     // ------------------------------------------------
@@ -82,6 +83,15 @@ public class PlayerHealth : MonoBehaviour
     // ------------------------------------------------
     // DAMAGE
     // ------------------------------------------------
+
+    public void TakeExplosionDamage(float damage)
+    {
+        if (currentState == PlayerState.Dead)
+            return;
+
+        TakeDamage(damage);
+    }
+
     void TakeDamage(float damage)
     {
         currentHealth -= damage;
@@ -157,25 +167,21 @@ public class PlayerHealth : MonoBehaviour
 
     IEnumerator DeathRoutine()
     {
-        // Dark red vignette
         vignette.color.Override(deathRed);
 
-        // Fade to full black
         yield return StartCoroutine(FadeVignetteUnscaled(1f));
 
         if (gameOverCanvas)
-            gameOverCanvas.enabled = true;
+            gameOverCanvas.gameObject.SetActive(true);
 
-        // Freeze time
         Time.timeScale = 0f;
 
-        // Wait while frozen
         yield return new WaitForSecondsRealtime(reloadDelay);
 
-        // Reload
         Time.timeScale = 1f;
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
+
 
     // ------------------------------------------------
     // VIGNETTE FADE (UNSCALED TIME)

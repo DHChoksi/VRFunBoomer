@@ -43,6 +43,16 @@ public class Enemy : MonoBehaviour
         currentPatrolTarget = pointA;
     }
 
+    void OnEnable()
+    {
+        BombEvents.OnBombHitEnemy += HandleBombHit;
+    }
+
+    void OnDisable()
+    {
+        BombEvents.OnBombHitEnemy -= HandleBombHit;
+    }
+
     void Update()
     {
         if (currentState == EnemyState.Dead)
@@ -157,6 +167,16 @@ public class Enemy : MonoBehaviour
     // ------------------------------------------------
     // DEATH (Any State → Die)
     // ------------------------------------------------
+
+    void HandleBombHit(GameObject hitEnemy, Vector3 explosionPos)
+    {
+        if (hitEnemy != gameObject)
+            return;
+
+        Debug.Log("💥 Enemy killed by bomb");
+        OnBombHit();
+    }
+
     public void OnBombHit()
     {
         if (currentState == EnemyState.Dead)
